@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101827">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Collection Tracker</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#151f30;--line:#26354b;--muted:#9aabc1;--text:#f4f7fb;--accent:#68d5a4}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(160deg,#142239 0%,var(--bg) 55%);font:16px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--text);min-height:100vh}
+main{width:min(100% - 28px,520px);margin:0 auto;padding:28px 0 40px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+h1{font-size:23px;margin:0;letter-spacing:-.5px}
+.sub{color:var(--muted);font-size:13px;margin-top:5px}
+.pill{border:1px solid #315b4b;color:var(--accent);padding:6px 10px;border-radius:99px;font-size:12px}
+.panel{background:rgba(21,31,48,.94);border:1px solid var(--line);border-radius:20px;padding:18px;margin:14px 0;box-shadow:0 12px 30px #0002}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:#101a29;border-radius:14px;padding:14px}
+.number{font-size:30px;font-weight:750;letter-spacing:-1px}
+.label{color:var(--muted);font-size:12px;margin-top:2px}
+button{font:inherit;cursor:pointer;border:0;border-radius:14px;padding:14px 16px;font-weight:700}
+.collect{width:100%;background:var(--accent);color:#082017;font-size:18px;padding:19px;margin-top:15px;box-shadow:0 7px 22px #68d5a422}
+.collect:active{transform:scale(.985)}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+h2{font-size:16px;margin:0}
+.date{color:var(--muted);font-size:12px}
+.entry{display:flex;align-items:center;justify-content:space-between;padding:13px 2px;border-bottom:1px solid var(--line)}
+.entry:last-child{border-bottom:0}
+.entry-left{display:flex;align-items:center;gap:12px}
+.tick{color:var(--accent);font-size:19px}
+.time{font-size:18px;font-weight:650;font-variant-numeric:tabular-nums}
+.meta{color:var(--muted);font-size:12px}
+.small{background:#223149;color:var(--text);font-size:13px;padding:10px 12px}
+.danger{color:#ffaaa8}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.empty{text-align:center;color:var(--muted);padding:26px 8px;font-size:14px}
+details summary{cursor:pointer;color:var(--muted);font-size:13px}
+.history-day{padding:12px 0;border-bottom:1px solid var(--line)}
+.history-day:last-child{border-bottom:0}
+.history-title{display:flex;justify-content:space-between;font-weight:650;margin-bottom:7px}
+.history-times{color:var(--muted);font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:12px}
+</style>
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+</script>
+</head>
+<body>
+<main>
+<header>
+ <div><h1>Collection tracker</h1><div class="sub">One tap. One timestamp. Every time.</div></div>
+ <span class="pill">24-hour clock</span>
+</header>
+<section class="panel">
+ <div class="stats">
+  <div class="stat"><div class="number" id="todayCount">0</div><div class="label">COLLECTIONS TODAY</div></div>
+  <div class="stat"><div class="number" id="lastTime">—</div><div class="label">LAST COLLECTION</div></div>
+ </div>
+ <button class="collect" id="collectBtn">＋ &nbsp; COLLECT</button>
+</section>
+<section class="panel">
+ <div class="section-head"><h2>Today's checklist</h2><span class="date" id="todayDate"></span></div>
+ <div id="todayList" class="empty">Nothing recorded yet.<br>Tap COLLECT to add your first time.</div>
+</section>
+<section class="panel">
+ <div class="section-head"><h2>History</h2><div class="actions"><button class="small" id="exportBtn">Export CSV</button></div></div>
+ <div id="history"></div>
+ <div id="historyEmpty" class="empty">Your previous days will appear here.</div>
+</section>
+<section class="panel">
+ <div class="actions">
+  <button class="small" id="undoBtn">Undo last</button>
+  <button class="small danger" id="clearTodayBtn">Clear today</button>
+ </div>
+</section>
+<footer>Entries are saved on this device in this browser. Export a CSV backup occasionally.</footer>
+</main>
+<script>
+const KEY='collection-tracker-v1';
+let records=[];
+try{records=JSON.parse(localStorage.getItem(KEY)||'[]');if(!Array.isArray(records))records=[]}catch(e){records=[]}
+const pad=n=>String(n).padStart(2,'0');
+const dateKey=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const timeNow=()=>{const d=new Date();return {date:dateKey(d),time:`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,created:d.getTime()}};
+const prettyDate=k=>new Date(k+'T12:00:00').toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+function save(){localStorage.setItem(KEY,JSON.stringify(records));render()}
+function render(){
+ const today=dateKey(new Date()), todays=records.filter(x=>x.date===today);
+ document.getElementById('todayDate').textContent=new Date().toLocaleDateString(undefined,{day:'numeric',month:'short'});
+ document.getElementById('todayCount').textContent=todays.length;
+ document.getElementById('lastTime').textContent=todays.length?todays[todays.length-1].time.slice(0,5):'—';
+ const list=document.getElementById('todayList');
+ if(!todays.length){list.className='empty';list.innerHTML='Nothing recorded yet.<br>Tap COLLECT to add your first time.'}
+ else{list.className='';list.innerHTML=todays.map((x,i)=>`<div class="entry"><div class="entry-left"><span class="tick">✓</span><span class="time">${x.time.slice(0,5)}</span></div><span class="meta">#${i+1}</span></div>`).join('')}
+ const groups={};records.filter(x=>x.date!==today).forEach(x=>(groups[x.date]??=[]).push(x));
+ const keys=Object.keys(groups).sort().reverse();
+ document.getElementById('historyEmpty').style.display=keys.length?'none':'block';
+ document.getElementById('history').innerHTML=keys.map(k=>`<details class="history-day"><summary><span class="history-title">${prettyDate(k)} <span>${groups[k].length} collected</span></span></summary><div class="history-times">${groups[k].map(x=>x.time.slice(0,5)).join('　·　')}</div></details>`).join('');
+ document.getElementById('undoBtn').disabled=!records.length;
+ document.getElementById('clearTodayBtn').disabled=!todays.length;
+}
+document.getElementById('collectBtn').addEventListener('click',()=>{records.push(timeNow());save()});
+document.getElementById('undoBtn').addEventListener('click',()=>{if(records.length){records.pop();save()}});
+document.getElementById('clearTodayBtn').addEventListener('click',()=>{if(confirm("Clear all of today's collection times?")){const t=dateKey(new Date());records=records.filter(x=>x.date!==t);save()}});
+document.getElementById('exportBtn').addEventListener('click',()=>{
+ const rows=[['Date','Time'],...records.map(x=>[x.date,x.time])];
+ const csv=rows.map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='collection-history.csv';a.click();URL.revokeObjectURL(a.href);
+});
+render();
+</script>
+</body>
+</html>
